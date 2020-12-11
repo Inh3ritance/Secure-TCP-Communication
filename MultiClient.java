@@ -5,26 +5,30 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.FileNotFoundException;
 import java.util.Scanner;
+import java.util.Base64;
+import javax.crypto.*;
+import javax.crypto.spec.SecretKeySpec;
+
+import javax.crypto.Cipher;
 
 public class MultiClient{
   public static void main(String[] args) throws NoSuchAlgorithmException, NoSuchProviderException {
     
     // Initialize Key Pair (Private + Public), RSA(512 bits)
     KeyPairGenerator keyGen = KeyPairGenerator.getInstance("RSA");
-    keyGen.initialize(512);
+    keyGen.initialize(512, new SecureRandom());
+    KeyPair pair = keyGen.generateKeyPair();
     // Key Generated
     
-    // Private key
-    String rsa_private = getPrivateKey(keyGen);
-    
-    // Public Key
-    String rsa_public = getPublicKey(keyGen);
+    // Private key + Public Key
+    PrivateKey rsa_private = pair.getPrivate();
+    PublicKey rsa_public = pair.getPublic();
   
     // write public key for other client
-    writePublicKey(rsa_public);
+    writePublicKey(rsa_public.getEncoded().toString());
     
-    // Retrieve client AES Key from other client
-    String secretKey = getKey();
+    // Retrieve unique AES Key
+    String secretKey = getKeyAES();
       
     // Perform and test AES encryption/decryption 
     String originalString = getMessage();
@@ -36,11 +40,31 @@ public class MultiClient{
     System.out.println(decryptedString);
     //  Done...
     
-    // Encrypt AES Key so we can safely send it it to the other client
+    // Encrypt AES Key so we can safely send it to the other client
+    String encryptedAES = "";
+    try {
+      encryptedAES = encryption(secretKey,rsa_private);
+    } catch (Exception e) {
+      e.printStackTrace();
+    }
     
+    // We now have Encrypte message and Encrypted Key, now we need MAC for Authentication
+    Mac mac = Mac.getInstance("HmacSHA256");
+    String macString = "";
+    try {
+      SecretKeySpec secretKeySpec = new SecretKeySpec("hello".getBytes(), "HmacSHA256");
+      mac.init(secretKeySpec); // HMAC initializes with the RSA public key
+      byte[] bytes = originalString.getBytes();      
+      byte[] macResult = mac.doFinal(bytes);
+      macString = new String(macResult);
+    } catch (Exception e) {
+      e.printStackTrace();
+    }
+    System.out.println("These 3");
+    System.out.println(encryptedString);
+    System.out.println(encryptedAES);
+    System.out.println(macString);
     
-    
-    //
   }
   
   // Write Public key to file
@@ -55,26 +79,8 @@ public class MultiClient{
     }
   }
   
-  // Retreive RSA Public Key
-  public static String getPublicKey(KeyPairGenerator keyGen){
-    byte[] publicKey = keyGen.genKeyPair().getPublic().getEncoded();
-    StringBuffer retString = new StringBuffer();
-    for (int i = 0; i < publicKey.length; ++i)
-     retString.append(Integer.toHexString(0x0100 + (publicKey[i] & 0x00FF)).substring(1));
-    return retString.toString();
-  }
-  
-  // Retrieve RSA Private Key
-  public static String getPrivateKey(KeyPairGenerator keyGen){
-    byte[] publicKey = keyGen.genKeyPair().getPrivate().getEncoded();
-    StringBuffer retString = new StringBuffer();
-    for (int i = 0; i < publicKey.length; ++i)
-     retString.append(Integer.toHexString(0x0100 + (publicKey[i] & 0x00FF)).substring(1));
-    return retString.toString();
-  }
-  
   // Retrieve AES Public Key
-  public static String getKey(){
+  public static String getKeyAES(){
     String secretKey = "";
     try {
       File myObj = new File("public_key.txt");
@@ -107,5 +113,20 @@ public class MultiClient{
     return message;
   }
   
+  // Encrypt with RSA
+  public static String encryption(String plainText, PrivateKey privateKey) throws Exception { // orininally byts[][]
+    Cipher cipher = Cipher.getInstance("RSA");
+    cipher.init(Cipher.ENCRYPT_MODE, privateKey);
+    byte[] enc = cipher.doFinal(plainText.getBytes());
+    return Base64.getEncoder().encodeToString(enc);
+  }
+  
+  // Decrypt with RSA
+  public static String decryption(byte[] cipherText, PublicKey publicKey) throws Exception { // originally byte[]
+    Cipher cipher = Cipher.getInstance("RSA");
+    cipher.init(Cipher.DECRYPT_MODE, publicKey);
+    byte[] result = cipher.doFinal(cipherText);
+    return new String(result);
+  }
 }
 
