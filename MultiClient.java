@@ -52,7 +52,7 @@ public class MultiClient{
     Mac mac = Mac.getInstance("HmacSHA256");
     String macString = "";
     try {
-      SecretKeySpec secretKeySpec = new SecretKeySpec("hello".getBytes(), "HmacSHA256");
+      SecretKeySpec secretKeySpec = new SecretKeySpec(rsa_public.getEncoded().toString().getBytes(), originalString);
       mac.init(secretKeySpec); // HMAC initializes with the RSA public key
       byte[] bytes = originalString.getBytes();      
       byte[] macResult = mac.doFinal(bytes);
@@ -60,12 +60,20 @@ public class MultiClient{
     } catch (Exception e) {
       e.printStackTrace();
     }
-    System.out.println("These 3");
-    System.out.println(encryptedString);
-    System.out.println(encryptedAES);
-    System.out.println(macString);
+    System.out.println("Sending these 3 pieces of data:");
+    System.out.println("Encrypted Message: " + encryptedString);
+    System.out.println("Encrypted Key: " + encryptedAES);
+    System.out.println("Mac hashed with PublicKey: " + macString);
+    
+    // We need to send the Data/Trasfer (Write File)
+    FileWriter fw = new FileWriter("./TransferedData/data.txt");
+    fw.write(rsa_public);
+    fw.close();
     
   }
+  
+  
+  
   
   // Write Public key to file
   public static void writePublicKey(String publicKey) {
